@@ -1,263 +1,243 @@
 import streamlit as st
 import plotly.graph_objects as go
 import pandas as pd
-import re
 
-st.set_page_config(page_title="Прогноз на мероприятие", layout="wide")
+st.set_page_config(page_title="Прогноз на мероприятие", layout="wide", initial_sidebar_state="collapsed")
 
 def get_next_version(base_name, existing_events, versions):
-    # Суффикс V# добавляется только для новых версий прошлых событий (Neuropunk, Bass Vibration), но не для Hardline
     if base_name in existing_events and base_name != 'Hardline':
         version = 2
         while f"{base_name} V{version}" in versions:
             version += 1
         return f"{base_name} V{version}"
-    return base_name  # Для Hardline возвращаем оригинальное имя без изменений
+    return base_name
 
 def generate_color(base_name):
-    # Генерируем уникальные цвета для новых версий событий на основе базового имени
-    color_map = {
-        'Neuropunk': '#ffcc00',  # Базовый цвет для Neuropunk V2 и далее
-        'Bass Vibration': '#00ffcc'  # Базовый цвет для Bass Vibration V2 и далее
-    }
-    base_color = color_map.get(base_name, '#ff005e')  # Для Hardline используем оригинальный цвет
+    color_map = {'Neuropunk': '#ffcc00', 'Bass Vibration': '#00ffcc'}
+    base_color = color_map.get(base_name, '#ff005e')
     if base_name == 'Hardline':
-        return '#ff005e'  # Оригинальный цвет для Hardline
-    # Если это новая версия, добавляем вариацию цвета (например, меняем яркость или оттенок)
+        return '#ff005e'
     match = re.search(r'V(\d+)$', base_name)
     if match:
         version = int(match.group(1))
-        # Генерируем уникальный оттенок на основе версии (например, увеличиваем насыщенность)
         r, g, b = tuple(int(base_color.lstrip('#')[i:i+2], 16) for i in (0, 2, 4))
         if base_name.startswith('Neuropunk'):
-            r = min(255, r + (version - 2) * 20)  # Увеличиваем красный для Neuropunk
-            g = max(0, g - (version - 2) * 10)  # Уменьшаем зелёный
+            r = min(255, r + (version - 2) * 20)
+            g = max(0, g - (version - 2) * 10)
         elif base_name.startswith('Bass Vibration'):
-            g = min(255, g + (version - 2) * 20)  # Увеличиваем зелёный для Bass Vibration
-            b = max(0, b - (version - 2) * 10)  # Уменьшаем синий
+            g = min(255, g + (version - 2) * 20)
+            b = max(0, b - (version - 2) * 10)
         return f'#{r:02x}{g:02x}{b:02x}'
-    return base_color  # Для базовых версий или Hardline
+    return base_color
 
 def main():
     st.title("Прогноз на мероприятие")
 
-    # Словарь с предустановленными мероприятиями (только для расчётов, не для полей ввода)
     events = {
         'Neuropunk': {'budget': 500000, 'guests': 500, 'ticket_price': 2000, 'marketing_percent': 0.3, 'fame_factor': 1.5},
         'Bass Vibration': {'budget': 120000, 'guests': 80, 'ticket_price': 1200, 'marketing_percent': 0.3, 'fame_factor': 1.0},
-        'Hardline': {'budget': 150000, 'ticket_price': 600, 'marketing_percent': 0.3, 'fame_factor': 1.0}
+        'Hardline': {'budget': 120000, 'ticket_price': 1200, 'marketing_percent': 0.3, 'fame_factor': 1.0}
     }
 
-    # Определение дефолтных значений для полей
-    default_budget = 120000  # Фиксированное начальное значение для всех
-    default_price = {
-        'Neuropunk': 1200,  # Начальное значение по умолчанию
-        'Bass Vibration': 1200,  # Начальное значение по умолчанию
-        'Hardline': 600  # Начальное значение для Hardline: 600₽
+    default_budget, default_risk, default_marketing = 120000, 0, 30
+    default_pre_sale = {
+        'stage1_price': 500, 'stage1_limit': 50,
+        'stage2_price': 600, 'stage2_limit': 50,
+        'stage3_price': 700, 'stage3_limit': 50,
+        'door_price': 1000, 'door_limit': 999
     }
-    default_risk = 0  # Начальное значение для всех: 0
-    default_marketing = 30  # Начальное значение для всех: 30 (как int)
 
-    # Инициализация session_state для отслеживания версий событий и значений полей
     if 'event_versions' not in st.session_state:
-        st.session_state.event_versions = {name: name for name in events.keys()}  # Базовые имена как начальные версии
+        st.session_state.event_versions = {name: name for name in events.keys()}
     if 'budget_values' not in st.session_state:
-        st.session_state.budget_values = {name: default_budget for name in events.keys()}  # Начальное значение 120,000₽ для всех
-    if 'price_values' not in st.session_state:
-        st.session_state.price_values = {name: default_price[name] for name in events.keys()}  # Начальные значения цен
+        st.session_state.budget_values = {name: default_budget for name in events.keys()}
     if 'risk_values' not in st.session_state:
-        st.session_state.risk_values = {name: default_risk for name in events.keys()}  # Начальное значение 0 для всех
+        st.session_state.risk_values = {name: default_risk for name in events.keys()}
     if 'marketing_values' not in st.session_state:
-        st.session_state.marketing_values = {name: default_marketing for name in events.keys()}  # Начальное значение 30% для всех (как int)
+        st.session_state.marketing_values = {name: default_marketing for name in events.keys()}
+    if 'pre_sale_values' not in st.session_state:
+        st.session_state.pre_sale_values = {name: default_pre_sale.copy() for name in events.keys()}
 
-    # Ввод данных
-    col1, col2, col3, col4 = st.columns(4)
+    current_event_name = st.session_state.event_versions.get('event_name', 'Hardline')
 
-    # Выбор названия мероприятия — оригинальные имена, с суффиксом V# для новых версий прошлых событий
-    base_event_names = list(events.keys())
-    current_event_name = col1.selectbox("Название мероприятия:", options=base_event_names, index=2, key="event_name")
-    display_event_name = get_next_version(current_event_name, events, st.session_state.event_versions)  # Генерируем имя с приставкой V# только для новых версий
+    # Разделение экрана: настройки слева, продажи справа
+    col_settings, col_sales = st.columns([1, 1])
 
-    # Обновляем версию события в session_state, если выбрано новое
-    if display_event_name != st.session_state.event_versions.get(current_event_name, current_event_name):
-        st.session_state.event_versions[current_event_name] = display_event_name
+    with col_settings:
+        st.subheader("Настройки")
+        col_settings_left, col_settings_right = st.columns([1, 1])
 
-    # Поля ввода с начальными значениями, сохраняющими пользовательские изменения
-    # Убеждаемся, что значения не сбрасываются на дефолтные или из events
-    new_budget = col1.number_input("Общий бюджет (₽):", min_value=0, value=st.session_state.budget_values.get(current_event_name, default_budget), step=1000, key=f"budget_{current_event_name}")
-    new_price = col2.number_input("Цена входа (₽):", min_value=1, value=st.session_state.price_values.get(current_event_name, default_price[current_event_name]), step=100, key=f"price_{current_event_name}")
-    risk_amount = col3.number_input("Финансовые риски (₽):", min_value=0, value=st.session_state.risk_values.get(current_event_name, default_risk), step=5000, key=f"risk_{current_event_name}")
-    # Исправляем slider, чтобы гарантировать, что value — это int, а не список или другой тип
-    marketing_value = st.session_state.marketing_values.get(current_event_name, default_marketing)
-    if not isinstance(marketing_value, int):
-        marketing_value = default_marketing  # Убедимся, что значение — int
-    marketing_percentage = col4.slider("Маркетинг (%):", min_value=0, max_value=100, value=marketing_value, step=5, key=f"marketing_{current_event_name}") / 100
+        current_event_name = col_settings_left.selectbox(
+            "Мероприятие:", options=list(events.keys()),
+            index=2 if current_event_name == 'Hardline' else list(events.keys()).index(current_event_name),
+            key="event_name"
+        )
+        display_event_name = get_next_version(current_event_name, events, st.session_state.event_versions)
 
-    # Сохраняем пользовательские значения в session_state перед расчётами
-    st.session_state.budget_values[current_event_name] = new_budget
-    st.session_state.price_values[current_event_name] = new_price
-    st.session_state.risk_values[current_event_name] = risk_amount
-    st.session_state.marketing_values[current_event_name] = int(marketing_percentage * 100)  # Сохраняем как int
+        if display_event_name != st.session_state.event_versions.get(current_event_name, current_event_name):
+            st.session_state.event_versions[current_event_name] = display_event_name
 
-    # Фактор известности: 1.5 только для "Neuropunk", иначе 1.0
+        marketing_percentage = col_settings_left.slider(
+            "Маркетинг (%):", 0, 100, st.session_state.marketing_values.get(current_event_name, default_marketing), 5,
+            key=f"marketing_{current_event_name}"
+        ) / 100
+        new_budget = col_settings_right.number_input(
+            "Бюджет (₽):", 0, value=st.session_state.budget_values.get(current_event_name, default_budget), step=1000,
+            key=f"budget_{current_event_name}"
+        )
+        risk_amount = col_settings_right.number_input(
+            "Расходы (₽):", 0, value=st.session_state.risk_values.get(current_event_name, default_risk), step=5000,
+            key=f"risk_{current_event_name}"
+        )
+
+        st.session_state.budget_values[current_event_name] = new_budget
+        st.session_state.risk_values[current_event_name] = risk_amount
+        st.session_state.marketing_values[current_event_name] = int(marketing_percentage * 100)
+
+    with col_sales:
+        st.subheader("Продажа билетов")
+        col_stage1, col_stage2, col_stage3, col_door = st.columns(4)
+
+        pre_sale = st.session_state.pre_sale_values[current_event_name]
+        with col_stage1:
+            stage1_price = st.number_input("Цена Этап 1", 1, value=pre_sale['stage1_price'], step=100, key=f"state1_price_{current_event_name}")
+            stage1_limit = st.number_input("Количество", 0, value=pre_sale['stage1_limit'], step=1, key=f"state1_limit_{current_event_name}")
+        with col_stage2:
+            stage2_price = st.number_input("Цена Этап 2", 1, value=pre_sale['stage2_price'], step=100, key=f"state2_price_{current_event_name}")
+            stage2_limit = st.number_input("Количество", 0, value=pre_sale['stage2_limit'], step=1, key=f"state2_limit_{current_event_name}")
+        with col_stage3:
+            stage3_price = st.number_input("Цена Этап 3", 1, value=pre_sale['stage3_price'], step=100, key=f"state3_price_{current_event_name}")
+            stage3_limit = st.number_input("Количество", 0, value=pre_sale['stage3_limit'], step=1, key=f"state3_limit_{current_event_name}")
+        with col_door:
+            door_price = st.number_input("Цена На входе", 1, value=pre_sale['door_price'], step=100, key=f"door_price_{current_event_name}")
+            door_limit = st.number_input("Количество", 0, value=pre_sale['door_limit'], step=1, key=f"door_limit_{current_event_name}")
+
+        st.session_state.pre_sale_values[current_event_name] = {
+            'stage1_price': stage1_price, 'stage1_limit': stage1_limit,
+            'stage2_price': stage2_price, 'stage2_limit': stage2_limit,
+            'stage3_price': stage3_price, 'stage3_limit': stage3_limit,
+            'door_price': door_price, 'door_limit': door_limit
+        }
+
+    # Расчеты
     fame_factor = 1.5 if current_event_name == 'Neuropunk' else 1.0
-
-    # Расчет маркетингового бюджета как процент от общего бюджета
     marketing_cost = max(0, new_budget * marketing_percentage)
     available_budget = new_budget - risk_amount
-    remaining_budget = available_budget - marketing_cost
 
-    base_guests = 0
-    base_marketing_effectiveness = 0.00223  # Настроен для 80 гостей при 120,000₽, 1,200₽, 30%
-    marketing_effectiveness_slope = 0.004
-
-    # Обновляем marketing_effectiveness с учётом fame_factor
-    marketing_effectiveness = base_marketing_effectiveness + marketing_effectiveness_slope * (fame_factor - 1.0)
-
-    # Рассчитываем гостей для всех мероприятий по формуле (без предустановленных значений для Hardline)
+    base_guests, marketing_effectiveness = 0, 0.00222 + 0.002 * (fame_factor - 1.0)
     marketing_guests = marketing_cost * marketing_effectiveness * fame_factor
-    # Общий avg_ticket_price
-    avg_ticket_price = (events['Neuropunk']['ticket_price'] + events['Bass Vibration']['ticket_price'] + events['Hardline']['ticket_price']) / 3  # 1,600₽
-    # Исправляем price_factor без ограничения до [0, 1], но с учётом цены Bass Vibration для Hardline
-    price_diff = (new_price - avg_ticket_price) / avg_ticket_price
-    if current_event_name == 'Hardline' and new_price == events['Bass Vibration']['ticket_price']:  # Если цена = 1,200 для Hardline
-        price_factor = 1  # Устанавливаем price_factor = 1 для равенства с Bass Vibration
-    elif current_event_name in ['Bass Vibration', 'Neuropunk'] and new_price == events[current_event_name]['ticket_price']:  # Если цена не изменена для других
-        price_factor = 1
-    else:
-        price_factor = 1 - 0.3 * price_diff  # Корректируем только при изменении цены
-    estimated_guests = max(0, round((base_guests + marketing_guests) * price_factor))
 
-    # Для "Neuropunk" и "Bass Vibration" при точном совпадении параметров используем предустановленные guests
-    if current_event_name in ['Neuropunk', 'Bass Vibration']:
-        if (abs(new_budget - events[current_event_name]['budget']) < 1000 and  # Допуск в 1000₽ для бюджета
-            new_price == events[current_event_name]['ticket_price'] and 
-            abs(marketing_percentage - events[current_event_name]['marketing_percent']) < 0.01):  # Допуск 1% для маркетинга
-            estimated_guests = events[current_event_name]['guests']
+    price_factor = 1
+    estimated_guests = min(stage1_limit + stage2_limit + stage3_limit + door_limit, max(0, round((base_guests + marketing_guests) * price_factor)))
+    total_guests = estimated_guests
+    ticket_sales = {
+        'stage1': min(total_guests, stage1_limit) if total_guests > 0 else 0,
+        'stage2': min(max(0, total_guests - stage1_limit), stage2_limit) if total_guests > stage1_limit else 0,
+        'stage3': min(max(0, total_guests - stage1_limit - stage2_limit), stage3_limit) if total_guests > stage1_limit + stage2_limit else 0,
+        'door': min(max(0, total_guests - stage1_limit - stage2_limit - stage3_limit), door_limit) if door_limit > 0 else max(0, total_guests - stage1_limit - stage2_limit - stage3_limit)
+    }
 
-    total_profit = new_budget - (risk_amount + marketing_cost) + (new_price * estimated_guests)
-    net_profit = total_profit - remaining_budget
+    avg_ticket_price = (ticket_sales['stage1'] * stage1_price + ticket_sales['stage2'] * stage2_price +
+                        ticket_sales['stage3'] * stage3_price + ticket_sales['door'] * door_price) / sum(ticket_sales.values()) if sum(ticket_sales.values()) > 0 else 0
 
-    # Обновляем данные для графика с выбранным названием (без суффиксов для прошлых событий, с V# для текущего нового события)
+    ticket_revenue = (ticket_sales['stage1'] * stage1_price + ticket_sales['stage2'] * stage2_price +
+                      ticket_sales['stage3'] * stage3_price + ticket_sales['door'] * door_price)
+    net_profit = new_budget - risk_amount - marketing_cost + ticket_revenue
+    bar_revenue = estimated_guests * 1200
+
     df = pd.DataFrame({
         'Бюджет': [events['Neuropunk']['budget'], events['Bass Vibration']['budget'], available_budget],
         'Количество гостей': [events['Neuropunk']['guests'], events['Bass Vibration']['guests'], estimated_guests],
-        'Стоимость входа': [events['Neuropunk']['ticket_price'], events['Bass Vibration']['ticket_price'], new_price],
-        'Мероприятие': ['Neuropunk', 'Bass Vibration', display_event_name if current_event_name in ['Neuropunk', 'Bass Vibration'] else current_event_name]  # Оригинальные имена для прошлых, V# только для текущих новых версий
+        'Стоимость входа': [events['Neuropunk']['ticket_price'], events['Bass Vibration']['ticket_price'], avg_ticket_price],
+        'Мероприятие': ['Neuropunk', 'Bass Vibration', display_event_name]
     })
 
-    # График и чекбоксы в двух колонках
-    col_left, col_right = st.columns([3, 1])
+    # График
+    fig = go.Figure()
+    colors = {'Neuropunk': 'yellow', 'Bass Vibration': 'green', 'Hardline': '#ff005e'}
 
-    with col_left:
-        fig = go.Figure()
-        colors = {
-            'Neuropunk': 'yellow',  # Оригинальный цвет для прошлых Neuropunk
-            'Bass Vibration': 'green',  # Оригинальный цвет для прошлых Bass Vibration
-            'Hardline': '#ff005e',  # Оригинальный цвет для Hardline (без V#)
-        }
-        # Динамически добавляем цвета для всех возможных версий событий до использования
-        for base_name in ['Neuropunk', 'Bass Vibration']:
-            version = 2
-            while True:
-                version_name = f"{base_name} V{version}"
-                if version_name not in colors:
-                    colors[version_name] = generate_color(version_name)
-                version += 1
-                if version > 10:  # Ограничиваем количество версий для производительности
-                    break
+    max_guests = max(df['Количество гостей'])  # Ограничение графика по максимальному количеству гостей
 
-        for _, row in df.iterrows():
-            display_name = row['Мероприятие']
-            if display_name in ['Neuropunk', 'Bass Vibration'] and display_name == current_event_name:
-                display_name = get_next_version(display_name, events, st.session_state.event_versions)  # Добавляем V# только для текущего нового события
-            if display_name == 'Neuropunk' and not st.session_state.get('show_neuropunk', True):
-                continue
-            if display_name == 'Bass Vibration' and not st.session_state.get('show_bass_vibration', True):
-                continue
-            if display_name == 'Hardline' and not st.session_state.get('show_hardline', True):
-                continue
-            fig.add_shape(type="line", x0=row['Количество гостей'], y0=0, x1=row['Количество гостей'], y1=row['Стоимость входа'], 
-                         line=dict(color='grey', dash="dot", width=1), layer='below')
-            fig.add_shape(type="line", x0=0, y0=row['Стоимость входа'], x1=row['Количество гостей'], y1=row['Стоимость входа'], 
-                         line=dict(color='grey', dash="dot", width=1), layer='below')
-            marker_color = colors[display_name]  # Используем оригинальные или новые цвета
-            fig.add_trace(go.Scatter(
-                x=[row['Количество гостей']],
-                y=[row['Стоимость входа']],
-                mode='markers+text',
-                name=display_name,
-                marker=dict(size=15, color=marker_color, opacity=1),
-                text=[display_name],
-                textposition='top center',
-                textfont=dict(color='white', size=12),
-                showlegend=False
-            ))
-        fig.update_layout(
-            xaxis_title="Количество гостей",
-            yaxis_title="Стоимость входа (₽)",
-            plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)',
-            font=dict(color='white', size=12),
-            height=600,
-            width=None
-        )
-        st.plotly_chart(fig, use_container_width=True)
+    for _, row in df.iterrows():
+        fig.add_shape(type="line", x0=row['Количество гостей'], y0=0, x1=row['Количество гостей'], y1=row['Стоимость входа'],
+                      line=dict(color='white', dash="dot", width=1), layer='below')  # Вертикальная пунктирная линия
+        fig.add_shape(type="line", x0=0, y0=row['Стоимость входа'], x1=row['Количество гостей'], y1=row['Стоимость входа'],
+                      line=dict(color='white', dash="dot", width=1), layer='below')  # Горизонтальная пунктирная линия
 
-    with col_right:
-        st.markdown(
-            """
-            <style>
-            .checkbox-container {
-                display: flex;
-                flex-direction: column;
-                align-items: flex-start;
-                margin-top: 0;
-            }
-            .checkbox-item {
-                display: flex;
-                flex-direction: row;
-                align-items: center;
-                margin-bottom: 10px;
-            }
-            </style>
-            """,
-            unsafe_allow_html=True
-        )
-        with st.container():
-            st.markdown('<div class="checkbox-container">', unsafe_allow_html=True)
-            st.markdown('<div class="checkbox-item">', unsafe_allow_html=True)
-            st.checkbox("", value=True, key="show_neuropunk", label_visibility="collapsed")
-            st.markdown('<span style="color: yellow;">Neuropunk</span>', unsafe_allow_html=True)  # Оригинальный цвет для прошлых событий
-            st.markdown('</div>', unsafe_allow_html=True)
-            st.markdown('<div class="checkbox-item">', unsafe_allow_html=True)
-            st.checkbox("", value=True, key="show_bass_vibration", label_visibility="collapsed")
-            st.markdown('<span style="color: green;">Bass Vibration</span>', unsafe_allow_html=True)  # Оригинальный цвет для прошлых событий
-            st.markdown('</div>', unsafe_allow_html=True)
-            st.markdown('<div class="checkbox-item">', unsafe_allow_html=True)
-            st.checkbox("", value=True, key="show_hardline", label_visibility="collapsed")
-            st.markdown(f'<span style="color: #ff005e;">{current_event_name}</span>', unsafe_allow_html=True)  # Оригинальный цвет для Hardline (без V#)
-            st.markdown('</div>', unsafe_allow_html=True)
-            st.markdown('</div>', unsafe_allow_html=True)
+        fig.add_trace(go.Scatter(
+            x=[row['Количество гостей']],
+            y=[row['Стоимость входа']],
+            mode='markers+text',
+            name=row['Мероприятие'],
+            marker=dict(size=15, color=colors[row['Мероприятие']], opacity=1),
+            text=[row['Мероприятие']],
+            textposition='top center',
+            textfont=dict(color='white', size=12),
+            showlegend=False
+        ))
 
-    # Метрики во всей ширине страницы под графиком
+    # Сетка графика
+    for i in range(0, int(max_guests) + 1, 100):
+        fig.add_shape(type="line", x0=i, y0=0, x1=i, y1=max(df['Стоимость входа']),
+                      line=dict(color='grey', width=1), layer='below')  # Вертикальные линии
+    for i in range(0, int(max(df['Стоимость входа'])) + 1, 500):
+        fig.add_shape(type="line", x0=0, y0=i, x1=max_guests, y1=i,
+                      line=dict(color='grey', width=1), layer='below')  # Горизонтальные линии
+
+    fig.update_layout(
+        xaxis_title="Количество гостей",
+        yaxis_title="Усреднённая стоимость билета (₽)",
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        font=dict(color='white', size=12),
+        height=600,
+        margin=dict(l=20, r=20, t=20, b=20),  # Уменьшение отступов
+        xaxis=dict(range=[0, max_guests])  # Ограничение графика по оси X
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
+    # Легенда под графиком
+    st.markdown("<div style='display: flex; justify-content: space-between; align-items: center;'>", unsafe_allow_html=True)
+    colors = {'Neuropunk': 'yellow', 'Bass Vibration': 'green', 'Hardline': '#ff005e'}
+    for event_name, color in colors.items():
+        st.markdown(f"<div style='display: flex; align-items: center; margin-right: 20px;'>"
+                    f"<span style='width: 12px; height: 12px; background-color: {color}; border-radius: 50%; margin-right: 10px;'></span>"
+                    f"<span>{event_name}</span></div>", unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # Метрики
     st.subheader("Расчетные данные")
-    col_metrics1, col_metrics2, col_metrics3, col_metrics4, col_metrics5 = st.columns(5)
-
+    col_metrics1, col_metrics2, col_metrics3, col_metrics4 = st.columns(4)
     with col_metrics1:
-        st.metric(f"Маркетинг ({marketing_percentage:.0%})", f"{marketing_cost:,.0f}₽")
-
+        st.metric("Маркетинг", f"{marketing_cost:,.0f}₽ ({marketing_percentage:.0%})")
     with col_metrics2:
+        remaining_budget = available_budget - marketing_cost
         st.metric("Остаток бюджета", f"{remaining_budget:,.0f}₽")
-
     with col_metrics3:
-        st.metric("Расчетное количество гостей", f"{estimated_guests:,d}")
-
+        st.metric("Количество гостей", f"{estimated_guests:,d}")
     with col_metrics4:
-        st.metric("Примерная прибыль", f"{total_profit:,.0f}₽")
+        st.metric("Выручка от продажи билетов", f"{ticket_revenue:,.0f}₽")
 
-    with col_metrics5:
+    # Распределение билетов
+    st.subheader("Распределение билетов")
+    col_ts1, col_ts2, col_ts3, col_ts4 = st.columns(4)
+    with col_ts1:
+        st.metric("Этап 1", f"{ticket_sales['stage1']} шт. по {stage1_price}₽")
+    with col_ts2:
+        st.metric("Этап 2", f"{ticket_sales['stage2']} шт. по {stage2_price}₽")
+    with col_ts3:
+        st.metric("Этап 3", f"{ticket_sales['stage3']} шт. по {stage3_price}₽")
+    with col_ts4:
+        st.metric("На входе", f"{ticket_sales['door']} шт. по {door_price}₽")
+
+    # Выручка
+    st.subheader("Выручка")
+    col_revenue1, col_revenue2 = st.columns(2)
+    with col_revenue1:
         st.metric("Чистая прибыль", f"{net_profit:,.0f}₽")
+    with col_revenue2:
+        st.metric("Общая выручка бара", f"{bar_revenue:,.0f}₽")
 
 if __name__ == "__main__":
     main()
