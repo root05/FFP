@@ -1,6 +1,7 @@
 import streamlit as st
 import plotly.graph_objects as go
 import pandas as pd
+import re
 
 st.set_page_config(page_title="Прогноз на мероприятие", layout="wide", initial_sidebar_state="collapsed")
 
@@ -57,45 +58,35 @@ def main():
         st.session_state.marketing_values = {name: default_marketing for name in events.keys()}
     if 'pre_sale_values' not in st.session_state:
         st.session_state.pre_sale_values = {name: default_pre_sale.copy() for name in events.keys()}
+    if 'checkbox_states' not in st.session_state:
+        st.session_state.checkbox_states = {'show_neuropunk': True, 'show_bass_vibration': True, 'show_hardline': True}
 
     current_event_name = st.session_state.event_versions.get('event_name', 'Hardline')
 
-    # Разделение экрана: настройки слева, продажи справа
-    col_settings, col_sales = st.columns([1, 1])
+    col_left, col_right = st.columns([1, 1])
 
-    with col_settings:
+    with col_left:
         st.subheader("Настройки")
         col_settings_left, col_settings_right = st.columns([1, 1])
 
-        current_event_name = col_settings_left.selectbox(
-            "Мероприятие:", options=list(events.keys()),
-            index=2 if current_event_name == 'Hardline' else list(events.keys()).index(current_event_name),
-            key="event_name"
-        )
+        current_event_name = col_settings_left.selectbox("Мероприятие:", options=list(events.keys()), 
+                                                        index=2 if current_event_name == 'Hardline' else list(events.keys()).index(current_event_name), 
+                                                        key="event_name")
         display_event_name = get_next_version(current_event_name, events, st.session_state.event_versions)
 
         if display_event_name != st.session_state.event_versions.get(current_event_name, current_event_name):
             st.session_state.event_versions[current_event_name] = display_event_name
 
-        marketing_percentage = col_settings_left.slider(
-            "Маркетинг (%):", 0, 100, st.session_state.marketing_values.get(current_event_name, default_marketing), 5,
-            key=f"marketing_{current_event_name}"
-        ) / 100
-        new_budget = col_settings_right.number_input(
-            "Бюджет (₽):", 0, value=st.session_state.budget_values.get(current_event_name, default_budget), step=1000,
-            key=f"budget_{current_event_name}"
-        )
-        risk_amount = col_settings_right.number_input(
-            "Расходы (₽):", 0, value=st.session_state.risk_values.get(current_event_name, default_risk), step=5000,
-            key=f"risk_{current_event_name}"
-        )
+        marketing_percentage = col_settings_left.slider("Маркетинг (%):", 0, 100, st.session_state.marketing_values.get(current_event_name, default_marketing), 5, key=f"marketing_{current_event_name}") / 100
+        new_budget = col_settings_right.number_input("Бюджет (₽):", 0, value=st.session_state.budget_values.get(current_event_name, default_budget), step=1000, key=f"budget_{current_event_name}")
+        risk_amount = col_settings_right.number_input("Расходы (₽):", 0, value=st.session_state.risk_values.get(current_event_name, default_risk), step=5000, key=f"risk_{current_event_name}")
 
         st.session_state.budget_values[current_event_name] = new_budget
         st.session_state.risk_values[current_event_name] = risk_amount
         st.session_state.marketing_values[current_event_name] = int(marketing_percentage * 100)
 
-    with col_sales:
-        st.subheader("Продажа билетов")
+    with col_right:
+        st.subheader("Продажа")
         col_stage1, col_stage2, col_stage3, col_door = st.columns(4)
 
         pre_sale = st.session_state.pre_sale_values[current_event_name]
@@ -119,7 +110,6 @@ def main():
             'door_price': door_price, 'door_limit': door_limit
         }
 
-    # Расчеты
     fame_factor = 1.5 if current_event_name == 'Neuropunk' else 1.0
     marketing_cost = max(0, new_budget * marketing_percentage)
     available_budget = new_budget - risk_amount
@@ -127,8 +117,21 @@ def main():
     base_guests, marketing_effectiveness = 0, 0.00222 + 0.002 * (fame_factor - 1.0)
     marketing_guests = marketing_cost * marketing_effectiveness * fame_factor
 
+    stage1_price, stage2_price, stage3_price, door_price = pre_sale['stage1_price'], pre_sale['stage2_price'], pre_sale['stage3_price'], pre_sale['door_price']
+    stage1_limit, stage2_limit, stage3_limit, door_limit = pre_sale['stage1_limit'], pre_sale['stage2_limit'], pre_sale['stage3_limit'], pre_sale['door_limit']
+
     price_factor = 1
-    estimated_guests = min(stage1_limit + stage2_limit + stage3_limit + door_limit, max(0, round((base_guests + marketing_guests) * price_factor)))
+    # Сначала рассчитываем количество гостей
+    total_tickets_available = stage1_limit + stage2_limit + stage3_limit + door_limit
+    # Предварительный расчет средней цены на основе доступных билетов для проверки условия
+    prelim_avg_price = (stage1_price * stage1_limit + stage2_price * stage2_limit + 
+                        stage3_price * stage3_limit + door_price * door_limit) / total_tickets_available if total_tickets_available > 0 else 0
+
+    # Обновленный расчет количества гостей для Hardline: если предварительная средняя цена выше 500, увеличиваем гостей
+    if current_event_name == 'Hardline' and prelim_avg_price > 500:
+        estimated_guests = min(total_tickets_available, max(0, round((base_guests + marketing_guests * 1.5) * price_factor)))  # Увеличиваем на 50%
+    else:
+        estimated_guests = min(total_tickets_available, max(0, round((base_guests + marketing_guests) * price_factor)))
     total_guests = estimated_guests
     ticket_sales = {
         'stage1': min(total_guests, stage1_limit) if total_guests > 0 else 0,
@@ -137,8 +140,10 @@ def main():
         'door': min(max(0, total_guests - stage1_limit - stage2_limit - stage3_limit), door_limit) if door_limit > 0 else max(0, total_guests - stage1_limit - stage2_limit - stage3_limit)
     }
 
+    # Корректный расчет средней цены билета на основе фактически проданных билетов
+    sold_tickets = sum(ticket_sales.values())
     avg_ticket_price = (ticket_sales['stage1'] * stage1_price + ticket_sales['stage2'] * stage2_price +
-                        ticket_sales['stage3'] * stage3_price + ticket_sales['door'] * door_price) / sum(ticket_sales.values()) if sum(ticket_sales.values()) > 0 else 0
+                        ticket_sales['stage3'] * stage3_price + ticket_sales['door'] * door_price) / sold_tickets if sold_tickets > 0 else 0
 
     ticket_revenue = (ticket_sales['stage1'] * stage1_price + ticket_sales['stage2'] * stage2_price +
                       ticket_sales['stage3'] * stage3_price + ticket_sales['door'] * door_price)
@@ -148,7 +153,7 @@ def main():
     df = pd.DataFrame({
         'Бюджет': [events['Neuropunk']['budget'], events['Bass Vibration']['budget'], available_budget],
         'Количество гостей': [events['Neuropunk']['guests'], events['Bass Vibration']['guests'], estimated_guests],
-        'Стоимость входа': [events['Neuropunk']['ticket_price'], events['Bass Vibration']['ticket_price'], avg_ticket_price],
+        'Стоимость входa': [events['Neuropunk']['ticket_price'], events['Bass Vibration']['ticket_price'], avg_ticket_price],
         'Мероприятие': ['Neuropunk', 'Bass Vibration', display_event_name]
     })
 
@@ -159,14 +164,15 @@ def main():
     max_guests = max(df['Количество гостей'])  # Ограничение графика по максимальному количеству гостей
 
     for _, row in df.iterrows():
-        fig.add_shape(type="line", x0=row['Количество гостей'], y0=0, x1=row['Количество гостей'], y1=row['Стоимость входа'],
-                      line=dict(color='white', dash="dot", width=1), layer='below')  # Вертикальная пунктирная линия
-        fig.add_shape(type="line", x0=0, y0=row['Стоимость входа'], x1=row['Количество гостей'], y1=row['Стоимость входа'],
-                      line=dict(color='white', dash="dot", width=1), layer='below')  # Горизонтальная пунктирная линия
+        fig.add_shape(type="line", x0=row['Количество гостей'], y0=0, x1=row['Количество гостей'], y1=row['Стоимость входa'],
+                      line=dict(color='#555555', dash="dash", width=1), layer='below')  # Пунктирные линии от точек
+        fig.add_shape(type="line", x0=0, y0=row['Стоимость входa'], x1=row['Количество гостей'], y1=row['Стоимость входa'],
+                      line=dict(color='#555555', dash="dash", width=1), layer='below')  # Пунктирные линии от точек
 
+        # Цветные точки и текст
         fig.add_trace(go.Scatter(
             x=[row['Количество гостей']],
-            y=[row['Стоимость входа']],
+            y=[row['Стоимость входa']],
             mode='markers+text',
             name=row['Мероприятие'],
             marker=dict(size=15, color=colors[row['Мероприятие']], opacity=1),
@@ -176,13 +182,13 @@ def main():
             showlegend=False
         ))
 
-    # Сетка графика
+    # Сетка графика (темнее)
     for i in range(0, int(max_guests) + 1, 100):
-        fig.add_shape(type="line", x0=i, y0=0, x1=i, y1=max(df['Стоимость входа']),
-                      line=dict(color='grey', width=1), layer='below')  # Вертикальные линии
-    for i in range(0, int(max(df['Стоимость входа'])) + 1, 500):
+        fig.add_shape(type="line", x0=i, y0=0, x1=i, y1=max(df['Стоимость входa']),
+                      line=dict(color='#333333', width=1), layer='below')  # Темные вертикальные линии
+    for i in range(0, int(max(df['Стоимость входa'])) + 1, 500):
         fig.add_shape(type="line", x0=0, y0=i, x1=max_guests, y1=i,
-                      line=dict(color='grey', width=1), layer='below')  # Горизонтальные линии
+                      line=dict(color='#333333', width=1), layer='below')  # Темные горизонтальные линии
 
     fig.update_layout(
         xaxis_title="Количество гостей",
@@ -190,21 +196,14 @@ def main():
         plot_bgcolor='rgba(0,0,0,0)',
         paper_bgcolor='rgba(0,0,0,0)',
         font=dict(color='white', size=12),
-        height=600,
-        margin=dict(l=20, r=20, t=20, b=20),  # Уменьшение отступов
-        xaxis=dict(range=[0, max_guests])  # Ограничение графика по оси X
+        height=500,
+        width=None,  # График во всю ширину экрана
+        margin=dict(l=10, r=10, t=10, b=30)  # Минимальные отступы для графика
     )
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True)  # Включил растягивание на всю ширину
 
-    # Легенда под графиком
-    st.markdown("<div style='display: flex; justify-content: space-between; align-items: center;'>", unsafe_allow_html=True)
-    colors = {'Neuropunk': 'yellow', 'Bass Vibration': 'green', 'Hardline': '#ff005e'}
-    for event_name, color in colors.items():
-        st.markdown(f"<div style='display: flex; align-items: center; margin-right: 20px;'>"
-                    f"<span style='width: 12px; height: 12px; background-color: {color}; border-radius: 50%; margin-right: 10px;'></span>"
-                    f"<span>{event_name}</span></div>", unsafe_allow_html=True)
-    st.markdown("</div>", unsafe_allow_html=True)
+    # Убрана легенда под графиком (по вашему требованию)
 
     # Метрики
     st.subheader("Расчетные данные")
@@ -221,23 +220,19 @@ def main():
 
     # Распределение билетов
     st.subheader("Распределение билетов")
-    col_ts1, col_ts2, col_ts3, col_ts4 = st.columns(4)
-    with col_ts1:
-        st.metric("Этап 1", f"{ticket_sales['stage1']} шт. по {stage1_price}₽")
-    with col_ts2:
-        st.metric("Этап 2", f"{ticket_sales['stage2']} шт. по {stage2_price}₽")
-    with col_ts3:
-        st.metric("Этап 3", f"{ticket_sales['stage3']} шт. по {stage3_price}₽")
-    with col_ts4:
-        st.metric("На входе", f"{ticket_sales['door']} шт. по {door_price}₽")
+    col_ts1, col_ts2, col_ts3, col_ts4 = st.columns([0.25, 0.25, 0.25, 0.25])  # Минимальная ширина колонок
+    with col_ts1: st.metric("Этап 1", f"{ticket_sales['stage1']} шт. по {stage1_price}₽")
+    with col_ts2: st.metric("Этап 2", f"{ticket_sales['stage2']} шт. по {stage2_price}₽")
+    with col_ts3: st.metric("Этап 3", f"{ticket_sales['stage3']} шт. по {stage3_price}₽")
+    with col_ts4: st.metric("На входе", f"{ticket_sales['door']} шт. по {door_price}₽")
 
     # Выручка
     st.subheader("Выручка")
-    col_revenue1, col_revenue2 = st.columns(2)
+    col_revenue1, col_revenue2 = st.columns([1, 1])  # Равные колонки для выравнивания
     with col_revenue1:
-        st.metric("Чистая прибыль", f"{net_profit:,.0f}₽")
+        st.metric("Выручка бара", f"{bar_revenue:,.0f}₽")
     with col_revenue2:
-        st.metric("Общая выручка бара", f"{bar_revenue:,.0f}₽")
+        st.metric("Чистая прибыль", f"{net_profit:,.0f}₽")
 
 if __name__ == "__main__":
     main()
