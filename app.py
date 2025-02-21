@@ -1,6 +1,8 @@
 import streamlit as st
 import plotly.graph_objects as go
 import pandas as pd
+import sys
+from streamlit.web import bootstrap
 
 st.set_page_config(page_title="Прогноз на мероприятие", layout="wide")
 
@@ -14,18 +16,18 @@ def main():
 
     # Ввод данных
     col1, col2, col3, col4 = st.columns(4)
-    new_budget = col1.number_input("Общий бюджет (₽):", min_value=0, value=150000, step=1000, key="budget")  # Установлено 150,000₽
+    new_budget = col1.number_input("Общий бюджет (₽):", min_value=0, value=150000, step=1000, key="budget")
     new_price = col2.number_input("Цена входа (₽):", min_value=1, value=600, step=100, key="price")
     risk_amount = col3.number_input("Финансовые риски (₽):", min_value=0, value=0, step=5000, key="risk")
     marketing_percentage = col4.slider("Маркетинг (%):", 0, 100, 30, 5, key="marketing") / 100
 
     # Расчет маркетингового бюджета как процент от общего бюджета
     marketing_cost = max(0, new_budget * marketing_percentage)
-    available_budget = new_budget - risk_amount  # Доступный бюджет для других расчетов
-    remaining_budget = available_budget - marketing_cost  # Остаток после маркетинга и рисков
+    available_budget = new_budget - risk_amount
+    remaining_budget = available_budget - marketing_cost
 
     base_guests = 0
-    base_marketing_effectiveness = 0.00144  # Подогнанный коэффициент
+    base_marketing_effectiveness = 0.00144
     marketing_effectiveness_slope = 0.002
 
     if new_budget == 500000 and new_price == 2000 and marketing_percentage == 0.3:
@@ -36,14 +38,12 @@ def main():
     marketing_effectiveness = base_marketing_effectiveness + marketing_effectiveness_slope * (fame_factor - 1.0)
     marketing_guests = marketing_cost * marketing_effectiveness * fame_factor
     avg_ticket_price = (events['Neuropunk']['ticket_price'] + events['Bass Vibration']['ticket_price']) / 2
-    price_factor = 1 - 2.2 * (new_price - avg_ticket_price) / avg_ticket_price  # Коэффициент 2.2
+    price_factor = 1 - 2.2 * (new_price - avg_ticket_price) / avg_ticket_price
 
-    # Рассчитываем количество гостей для "Hardline" динамически
     estimated_guests = min(600, max(0, round((base_guests + marketing_guests) * price_factor)))
 
-    # Расчет двух видов прибыли согласно вашему описанию
-    total_profit = new_budget - (risk_amount + marketing_cost) + (new_price * estimated_guests)  # Примерная прибыль
-    net_profit = total_profit - remaining_budget  # Чистая прибыль
+    total_profit = new_budget - (risk_amount + marketing_cost) + (new_price * estimated_guests)
+    net_profit = total_profit - remaining_budget
 
     df = pd.DataFrame({
         'Бюджет': [events['Neuropunk']['budget'], events['Bass Vibration']['budget'], available_budget],
@@ -52,8 +52,7 @@ def main():
         'Мероприятие': ['Neuropunk', 'Bass Vibration', 'Hardline']
     })
 
-    # График и чекбоксы в двух колонках
-    col_left, col_right = st.columns([3, 1])  # График слева (75%), чекбоксы справа (25%)
+    col_left, col_right = st.columns([3, 1])
 
     with col_left:
         fig = go.Figure()
@@ -92,7 +91,6 @@ def main():
         st.plotly_chart(fig, use_container_width=True)
 
     with col_right:
-        # Чекбоксы
         st.markdown(
             """
             <style>
@@ -128,7 +126,6 @@ def main():
             st.markdown('</div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
-    # Метрики во всю ширину страницы под графиком (без "Финансовых рисков")
     st.subheader("Расчетные данные")
     st.markdown(
         """
@@ -140,7 +137,7 @@ def main():
         """,
         unsafe_allow_html=True
     )
-    col_metrics1, col_metrics2, col_metrics3, col_metrics4, col_metrics5 = st.columns(5)  # Сохранили 5 колонок для "Чистой прибыли" последней
+    col_metrics1, col_metrics2, col_metrics3, col_metrics4, col_metrics5 = st.columns(5)
 
     with col_metrics1:
         st.metric(f"Маркетинг ({marketing_percentage:.0%})", f"{marketing_cost:,.0f}₽", 
@@ -169,10 +166,19 @@ def main():
                  delta_color="normal")
 
     with col_metrics4:
-        st.metric("Примерная прибыль", f"{total_profit:,.0f}₽")  # Примерная прибыль (с учетом остатка)
+        st.metric("Примерная прибыль", f"{total_profit:,.0f}₽")
 
     with col_metrics5:
-        st.metric("Чистая прибыль", f"{net_profit:,.0f}₽")  # Чистая прибыль (без остатка) последней
+        st.metric("Чистая прибыль", f"{net_profit:,.0f}₽")
 
 if __name__ == "__main__":
     main()
+
+# Добавляем WSGI-совместимый запуск для Render
+def run_streamlit():
+    # Запускаем Streamlit через его внутренний сервер
+    bootstrap.run("app.py", "", [], [])
+
+if __name__ == "__main__":
+    # Для локального запуска через `python app.py` или Render
+    run_streamlit()
