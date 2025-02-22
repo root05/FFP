@@ -196,7 +196,7 @@ def main():
     marketing_cost = new_budget * marketing_percentage
     min_fame, max_fame = 1.0, 10.15
     min_marketing, max_marketing = 22700, 100000
-    fame_factor = min_fame + (max_fame - min_fame) * min(1.0, max(0.0, (marketing_cost - min_marketing) / (max_marketing - min_marketing))))
+    fame_factor = min_fame + (max_fame - min_fame) * min(1.0, max(0.0, (marketing_cost - min_marketing) / (max_marketing - min_marketing)))
     if current_event_name in events:
         fame_factor = events[current_event_name]['fame_factor']
 
