@@ -109,8 +109,7 @@ def main():
         st.session_state.budget_values['New'] = default_budget
     if 'risk_values' not in st.session_state:
         st.session_state.risk_values = {name: events[name]['risk_amount'] for name in events.keys()}
-        # Установлено значение расходов для New на 60,000 по умолчанию
-        st.session_state.risk_values['New'] = 60000
+        st.session_state.risk_values['New'] = default_risk
     if 'marketing_values' not in st.session_state:
         st.session_state.marketing_values = {name: int(events[name]['marketing_percent'] * 100) for name in events.keys()}
         st.session_state.marketing_values['New'] = default_marketing
@@ -149,9 +148,8 @@ def main():
             "Маркетинг (%):", 0, 100, st.session_state.marketing_values.get(current_event_name, default_marketing), 5,
             key=f"marketing_{current_event_name}"
         ) / 100
-        # Заменил "Проходки:" на "Free:"
         free_tickets = col_settings_middle.number_input(
-            "Free:", 0, value=st.session_state.free_tickets.get(current_event_name, 0), step=1,
+            "Проходки:", 0, value=st.session_state.free_tickets.get(current_event_name, 0), step=1,
             key=f"free_{current_event_name}"
         )
         new_budget = col_settings_right.number_input(
@@ -313,9 +311,8 @@ def main():
         st.metric("Маркетинг", f"{marketing_cost:,.0f}₽ ({marketing_percentage:.0%})")
     with col_metrics2:
         st.metric("Остаток бюджета", f"{remaining_budget:,.0f}₽")
-    # Убраны скобочки и информация о проходках в метрике "Количество гостей"
     with col_metrics3:
-        st.metric("Количество гостей", f"{total_attendance:,d}")
+        st.metric("Количество гостей", f"{total_attendance:,d} (проходки: {free_tickets})")
     with col_metrics4:
         st.metric("Выручка от продажи билетов", f"{ticket_revenue:,.0f}₽")
 
