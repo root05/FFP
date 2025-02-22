@@ -149,7 +149,7 @@ def main():
             key=f"marketing_{current_event_name}"
         ) / 100
         free_tickets = col_settings_middle.number_input(
-            "Проходки:", 0, value=st.session_state.free_tickets.get(current_event_name, 0), step=1,
+            "Free:", 0, value=st.session_state.free_tickets.get(current_event_name, 0), step=1,
             key=f"free_{current_event_name}"
         )
         new_budget = col_settings_right.number_input(
@@ -312,7 +312,7 @@ def main():
     with col_metrics2:
         st.metric("Остаток бюджета", f"{remaining_budget:,.0f}₽")
     with col_metrics3:
-        st.metric("Количество гостей", f"{total_attendance:,d} (проходки: {free_tickets})")
+        st.metric("Количество гостей", f"{total_attendance:,d} ("+" {free_tickets})")
     with col_metrics4:
         st.metric("Выручка от продажи билетов", f"{ticket_revenue:,.0f}₽")
 
