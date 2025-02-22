@@ -109,7 +109,8 @@ def main():
         st.session_state.budget_values['New'] = default_budget
     if 'risk_values' not in st.session_state:
         st.session_state.risk_values = {name: events[name]['risk_amount'] for name in events.keys()}
-        st.session_state.risk_values['New'] = default_risk
+        # Установил расходы для New на 60,000₽ по умолчанию
+        st.session_state.risk_values['New'] = 60000
     if 'marketing_values' not in st.session_state:
         st.session_state.marketing_values = {name: int(events[name]['marketing_percent'] * 100) for name in events.keys()}
         st.session_state.marketing_values['New'] = default_marketing
@@ -148,8 +149,9 @@ def main():
             "Маркетинг (%):", 0, 100, st.session_state.marketing_values.get(current_event_name, default_marketing), 5,
             key=f"marketing_{current_event_name}"
         ) / 100
+        # Заменил "Проходки" на "Free"
         free_tickets = col_settings_middle.number_input(
-            "Проходки:", 0, value=st.session_state.free_tickets.get(current_event_name, 0), step=1,
+            "Free:", 0, value=st.session_state.free_tickets.get(current_event_name, 0), step=1,
             key=f"free_{current_event_name}"
         )
         new_budget = col_settings_right.number_input(
@@ -194,7 +196,7 @@ def main():
     marketing_cost = new_budget * marketing_percentage
     min_fame, max_fame = 1.0, 10.15
     min_marketing, max_marketing = 22700, 100000
-    fame_factor = min_fame + (max_fame - min_fame) * min(1.0, max(0.0, (marketing_cost - min_marketing) / (max_marketing - min_marketing)))
+    fame_factor = min_fame + (max_fame - min_fame) * min(1.0, max(0.0, (marketing_cost - min_marketing) / (max_marketing - min_marketing))))
     if current_event_name in events:
         fame_factor = events[current_event_name]['fame_factor']
 
@@ -312,7 +314,8 @@ def main():
     with col_metrics2:
         st.metric("Остаток бюджета", f"{remaining_budget:,.0f}₽")
     with col_metrics3:
-        st.metric("Количество гостей", f"{total_attendance:,d} (проходки: {free_tickets})")
+        # Убрал уточнение "проходки: X", показываем только общее количество гостей
+        st.metric("Количество гостей", f"{total_attendance:,d}")
     with col_metrics4:
         st.metric("Выручка от продажи билетов", f"{ticket_revenue:,.0f}₽")
 
