@@ -75,7 +75,7 @@ def main():
         'Hardline I': {'budget': 120000, 'guests': 140, 'ticket_price': 940, 'marketing_percent': 0.2, 'fame_factor': 1.0, 'risk_amount': 25000}
     }
 
-    default_budget, default_risk, default_marketing = 120000, 0, 20
+    default_budget, default_risk, default_marketing = 100000, 0, 20
     default_pre_sale = {
         'stage1_price': 500, 'stage1_limit': 50,
         'stage2_price': 600, 'stage2_limit': 50,
