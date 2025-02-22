@@ -7,7 +7,7 @@ import math
 st.set_page_config(page_title="Прогноз на мероприятие", layout="wide", initial_sidebar_state="collapsed")
 
 def get_next_version(base_name, existing_events, versions):
-    if base_name in existing_events and base_name != 'Hardline':
+    if base_name in existing_events and base_name != 'Hardline I':
         version = 2
         while f"{base_name} V{version}" in versions:
             version += 1
@@ -15,8 +15,10 @@ def get_next_version(base_name, existing_events, versions):
     return base_name
 
 def generate_color(base_name):
-    color_map = {'Neuropunk': '#ffcc00', 'Bass Vibration': '#00ffcc'}
+    color_map = {'Neuropunk': '#ffcc00', 'Bass Vibration IV': '#00ffcc'}
     base_color = color_map.get(base_name, '#ff005e')
+    if base_name == 'Hardline I':
+        return '#ff005e'
     match = re.search(r'V(\d+)$', base_name)
     if match:
         version = int(match.group(1))
@@ -36,12 +38,16 @@ def calculate_guests_and_price(stage1_price, stage1_limit, stage2_price, stage2_
     if total_tickets_available == 0:
         return 0, {'stage1': 0, 'stage2': 0, 'stage3': 0, 'door': 0}, 0, 0
 
+    w1 = stage1_limit / total_tickets_available if total_tickets_available > 0 else 0
+    w2 = stage2_limit / total_tickets_available if total_tickets_available > 0 else 0
+    w3 = stage3_limit / total_tickets_available if total_tickets_available > 0 else 0
+    w4 = door_limit / total_tickets_available if total_tickets_available > 0 else 0
+
     k = 0.0038
     estimated_guests = 0
     avg_ticket_price = 0
     for _ in range(max_iterations):
-        weighted_price = ((stage1_price * stage1_limit + stage2_price * stage2_limit +
-                           stage3_price * stage3_limit + door_price * door_limit) / total_tickets_available)
+        weighted_price = w1 * stage1_price + w2 * stage2_price + w3 * stage3_price + w4 * door_price
         price_factor = math.exp(-k * weighted_price)
         estimated_guests = min(total_tickets_available, max(0, round(marketing_guests * price_factor)))
 
@@ -52,8 +58,10 @@ def calculate_guests_and_price(stage1_price, stage1_limit, stage2_price, stage2_
             'door': min(max(0, estimated_guests - stage1_limit - stage2_limit - stage3_limit), door_limit) if door_limit > 0 else max(0, estimated_guests - stage1_limit - stage2_limit - stage3_limit)
         }
         sold_tickets = sum(ticket_sales.values())
-        ticket_revenue = (ticket_sales['stage1'] * stage1_price + ticket_sales['stage2'] * stage2_price +
-                          ticket_sales['stage3'] * stage3_price + ticket_sales['door'] * door_price)
+        ticket_revenue = (ticket_sales['stage1'] * stage1_price +
+                          ticket_sales['stage2'] * stage2_price +
+                          ticket_sales['stage3'] * stage3_price +
+                          ticket_sales['door'] * door_price)
         avg_ticket_price = ticket_revenue / sold_tickets if sold_tickets > 0 else weighted_price
 
     return estimated_guests, ticket_sales, avg_ticket_price, ticket_revenue
@@ -63,11 +71,11 @@ def main():
 
     events = {
         'Neuropunk': {'budget': 500000, 'guests': 500, 'ticket_price': 2000, 'marketing_percent': 0.2, 'fame_factor': 10.15, 'risk_amount': 0},
-        'Bass Vibration': {'budget': 113500, 'guests': 110, 'ticket_price': 1200, 'marketing_percent': 0.2, 'fame_factor': 1.0, 'risk_amount': 96000},
-        'Hardline': {'budget': 120000, 'guests': 140, 'ticket_price': 940, 'marketing_percent': 0.2, 'fame_factor': 0.53, 'risk_amount': 25000}
+        'Bass Vibration IV': {'budget': 113500, 'guests': 110, 'ticket_price': 1200, 'marketing_percent': 0.2, 'fame_factor': 1.0, 'risk_amount': 96000},
+        'Hardline I': {'budget': 120000, 'guests': 140, 'ticket_price': 940, 'marketing_percent': 0.2, 'fame_factor': 1.0, 'risk_amount': 25000}
     }
 
-    default_budget, default_risk, default_marketing = 120000, 0, 20
+    default_budget, default_risk, default_marketing = 100000, 0, 20
     default_pre_sale = {
         'stage1_price': 500, 'stage1_limit': 50,
         'stage2_price': 600, 'stage2_limit': 50,
@@ -108,13 +116,13 @@ def main():
     if 'pre_sale_values' not in st.session_state:
         st.session_state.pre_sale_values = {name: default_pre_sale.copy() for name in events.keys()}
         st.session_state.pre_sale_values['New'] = default_pre_sale.copy()
-        st.session_state.pre_sale_values['Hardline'] = hardline_pre_sale.copy()
-        st.session_state.pre_sale_values['Bass Vibration'] = bass_vibration_pre_sale.copy()
+        st.session_state.pre_sale_values['Hardline I'] = hardline_pre_sale.copy()
+        st.session_state.pre_sale_values['Bass Vibration IV'] = bass_vibration_pre_sale.copy()
         st.session_state.pre_sale_values['Neuropunk'] = neuropunk_pre_sale.copy()
     if 'checkbox_states' not in st.session_state:
-        st.session_state.checkbox_states = {'Neuropunk': True, 'Bass Vibration': True, 'Hardline': True, 'New': True}
+        st.session_state.checkbox_states = {'Neuropunk': True, 'Bass Vibration IV': True, 'Hardline I': True, 'New': True}
     if 'free_tickets' not in st.session_state:
-        st.session_state.free_tickets = {'Neuropunk': 20, 'Bass Vibration': 35, 'Hardline': 21, 'New': 0}
+        st.session_state.free_tickets = {'Neuropunk': 20, 'Bass Vibration IV': 35, 'Hardline I': 21, 'New': 0}
     if 'current_event' not in st.session_state:
         st.session_state.current_event = 'New'
 
@@ -125,19 +133,33 @@ def main():
         col_settings_left, col_settings_middle, col_settings_right = st.columns([1, 0.25, 1])
 
         event_options = list(events.keys()) + ['New']
-        current_event_name = col_settings_left.selectbox("Мероприятие:", options=event_options,
-                                                         index=event_options.index(st.session_state.current_event),
-                                                         key="event_name")
+        current_event_name = col_settings_left.selectbox(
+            "Мероприятие:", options=event_options,
+            index=event_options.index(st.session_state.current_event),
+            key="event_name"
+        )
         st.session_state.current_event = current_event_name
         display_event_name = get_next_version(current_event_name, events, st.session_state.event_versions)
 
         if current_event_name != 'New' and display_event_name != st.session_state.event_versions.get(current_event_name, current_event_name):
             st.session_state.event_versions[current_event_name] = display_event_name
 
-        marketing_percentage = col_settings_left.slider("Маркетинг (%):", 0, 100, st.session_state.marketing_values.get(current_event_name, default_marketing), 5, key=f"marketing_{current_event_name}") / 100
-        free_tickets = col_settings_middle.number_input("Проходки:", 0, value=st.session_state.free_tickets.get(current_event_name, 0), step=1, key=f"free_{current_event_name}")
-        new_budget = col_settings_right.number_input("Бюджет (₽):", 0, value=st.session_state.budget_values.get(current_event_name, default_budget), step=1000, key=f"budget_{current_event_name}")
-        risk_amount = col_settings_right.number_input("Расходы (₽):", 0, value=st.session_state.risk_values.get(current_event_name, default_risk), step=5000, key=f"risk_{current_event_name}")
+        marketing_percentage = col_settings_left.slider(
+            "Маркетинг (%):", 0, 100, st.session_state.marketing_values.get(current_event_name, default_marketing), 5,
+            key=f"marketing_{current_event_name}"
+        ) / 100
+        free_tickets = col_settings_middle.number_input(
+            "Проходки:", 0, value=st.session_state.free_tickets.get(current_event_name, 0), step=1,
+            key=f"free_{current_event_name}"
+        )
+        new_budget = col_settings_right.number_input(
+            "Бюджет (₽):", 0, value=st.session_state.budget_values.get(current_event_name, default_budget), step=1000,
+            key=f"budget_{current_event_name}"
+        )
+        risk_amount = col_settings_right.number_input(
+            "Расходы (₽):", 0, value=st.session_state.risk_values.get(current_event_name, default_risk), step=5000,
+            key=f"risk_{current_event_name}"
+        )
 
         st.session_state.budget_values[current_event_name] = new_budget
         st.session_state.risk_values[current_event_name] = risk_amount
@@ -204,7 +226,7 @@ def main():
         else:
             df_data['Бюджет'].append(events[event]['budget'] - events[event]['risk_amount'])
             df_data['Количество гостей'].append(events[event]['guests'] + st.session_state.free_tickets.get(event, 0))
-            df_data['Стоимость входa'].append(events[event]['ticket_price'] if event != 'Hardline' else 940)
+            df_data['Стоимость входa'].append(events[event]['ticket_price'])
         df_data['Мероприятие'].append(event)
 
     if current_event_name == 'New':
@@ -216,11 +238,11 @@ def main():
     df = pd.DataFrame(df_data)
 
     fig = go.Figure()
-    colors = {'Neuropunk': 'yellow', 'Bass Vibration': 'green', 'Hardline': '#ff005e', 'New': '#ff00ff'}
+    colors = {'Neuropunk': 'yellow', 'Bass Vibration IV': 'green', 'Hardline I': '#ff005e', 'New': '#ff00ff'}
     visibility = {
         'Neuropunk': st.session_state.checkbox_states['Neuropunk'],
-        'Bass Vibration': st.session_state.checkbox_states['Bass Vibration'],
-        'Hardline': st.session_state.checkbox_states['Hardline'],
+        'Bass Vibration IV': st.session_state.checkbox_states['Bass Vibration IV'],
+        'Hardline I': st.session_state.checkbox_states['Hardline I'],
         'New': st.session_state.checkbox_states.get('New', True) and current_event_name == 'New'
     }
 
@@ -229,6 +251,8 @@ def main():
     for _, row in df.iterrows():
         event_name = row['Мероприятие']
         base_event_name = 'New' if event_name.startswith('New') else event_name
+        if base_event_name in events:
+            base_event_name = event_name
         if visibility.get(base_event_name, False):
             fig.add_shape(type="line", x0=row['Количество гостей'], y0=0, x1=row['Количество гостей'], y1=row['Стоимость входa'],
                           line=dict(color='#555555', dash="dash", width=1), layer='below')
@@ -272,11 +296,11 @@ def main():
         show_neuropunk = st.checkbox("Neuropunk", value=st.session_state.checkbox_states['Neuropunk'], key="show_neuropunk")
         st.session_state.checkbox_states['Neuropunk'] = show_neuropunk
     with col_check2:
-        show_bass_vibration = st.checkbox("Bass Vibration", value=st.session_state.checkbox_states['Bass Vibration'], key="show_bass_vibration")
-        st.session_state.checkbox_states['Bass Vibration'] = show_bass_vibration
+        show_bass_vibration = st.checkbox("Bass Vibration IV", value=st.session_state.checkbox_states['Bass Vibration IV'], key="show_bass_vibration")
+        st.session_state.checkbox_states['Bass Vibration IV'] = show_bass_vibration
     with col_check3:
-        show_hardline = st.checkbox("Hardline", value=st.session_state.checkbox_states['Hardline'], key="show_hardline")
-        st.session_state.checkbox_states['Hardline'] = show_hardline
+        show_hardline = st.checkbox("Hardline I", value=st.session_state.checkbox_states['Hardline I'], key="show_hardline")
+        st.session_state.checkbox_states['Hardline I'] = show_hardline
     with col_check4:
         show_new = st.checkbox("New", value=st.session_state.checkbox_states.get('New', True), key="show_new")
         st.session_state.checkbox_states['New'] = show_new
