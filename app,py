@@ -312,7 +312,7 @@ def main():
     with col_metrics2:
         st.metric("Остаток бюджета", f"{remaining_budget:,.0f}₽")
     with col_metrics3:
-        st.metric("Количество гостей", f"{total_attendance:,d} ("+" {free_tickets})")
+        st.metric("Количество гостей", f"{total_attendance:,d} ("+ {free_tickets})")
     with col_metrics4:
         st.metric("Выручка от продажи билетов", f"{ticket_revenue:,.0f}₽")
 
