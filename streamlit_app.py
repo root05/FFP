@@ -33,7 +33,7 @@ def generate_color(base_name):
     return base_color
 
 def calculate_guests_and_price(stage1_price, stage1_limit, stage2_price, stage2_limit, stage3_price, stage3_limit,
-                                door_price, door_limit, marketing_guests, free_tickets, fame_factor, max_iterations=2):
+                               door_price, door_limit, marketing_guests, free_tickets, fame_factor, max_iterations=2):
     total_tickets_available = stage1_limit + stage2_limit + stage3_limit + door_limit
     if total_tickets_available == 0:
         return 0, {'stage1': 0, 'stage2': 0, 'stage3': 0, 'door': 0}, 0, 0
@@ -75,7 +75,7 @@ def main():
         'Hardline I': {'budget': 120000, 'guests': 140, 'ticket_price': 940, 'marketing_percent': 0.2, 'fame_factor': 1.0, 'risk_amount': 25000}
     }
 
-    default_budget, default_risk, default_marketing = 100000, 0, 20
+    default_budget, default_risk, default_marketing = 115000, 0, 20  # Изменены дефолтные значения
     default_pre_sale = {
         'stage1_price': 500, 'stage1_limit': 50,
         'stage2_price': 600, 'stage2_limit': 50,
@@ -106,10 +106,10 @@ def main():
         st.session_state.event_versions = {name: name for name in events.keys()}
     if 'budget_values' not in st.session_state:
         st.session_state.budget_values = {name: events[name]['budget'] for name in events.keys()}
-        st.session_state.budget_values['New'] = default_budget
+        st.session_state.budget_values['New'] = default_budget  # Теперь 115,000 ₽
     if 'risk_values' not in st.session_state:
         st.session_state.risk_values = {name: events[name]['risk_amount'] for name in events.keys()}
-        st.session_state.risk_values['New'] = 60000  # Установлены расходы для New на 60,000₽
+        st.session_state.risk_values['New'] = default_risk  # Теперь 0 ₽
     if 'marketing_values' not in st.session_state:
         st.session_state.marketing_values = {name: int(events[name]['marketing_percent'] * 100) for name in events.keys()}
         st.session_state.marketing_values['New'] = default_marketing
@@ -122,7 +122,7 @@ def main():
     if 'checkbox_states' not in st.session_state:
         st.session_state.checkbox_states = {'Neuropunk': True, 'Bass Vibration IV': True, 'Hardline I': True, 'New': True}
     if 'free_tickets' not in st.session_state:
-        st.session_state.free_tickets = {'Neuropunk': 20, 'Bass Vibration IV': 35, 'Hardline I': 21, 'New': 0}
+        st.session_state.free_tickets = {'Neuropunk': 20, 'Bass Vibration IV': 35, 'Hardline I': 21, 'New': 20}  # Теперь 20
     if 'current_event' not in st.session_state:
         st.session_state.current_event = 'New'
 
@@ -148,9 +148,8 @@ def main():
             "Маркетинг (%):", 0, 100, st.session_state.marketing_values.get(current_event_name, default_marketing), 5,
             key=f"marketing_{current_event_name}"
         ) / 100
-        # Заменил "Проходки" на "Free"
         free_tickets = col_settings_middle.number_input(
-            "Free:", 0, value=st.session_state.free_tickets.get(current_event_name, 0), step=1,
+            "Free:", 0, value=st.session_state.free_tickets.get(current_event_name, 20), step=1,  # Дефолт теперь 20
             key=f"free_{current_event_name}"
         )
         new_budget = col_settings_right.number_input(
@@ -313,7 +312,6 @@ def main():
     with col_metrics2:
         st.metric("Остаток бюджета", f"{remaining_budget:,.0f}₽")
     with col_metrics3:
-        # Убрал уточнение "проходки: X", показываем только общее количество гостей
         st.metric("Количество гостей", f"{total_attendance:,d}")
     with col_metrics4:
         st.metric("Выручка от продажи билетов", f"{ticket_revenue:,.0f}₽")
